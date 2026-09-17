@@ -145,6 +145,10 @@ const char index_html[] PROGMEM = R"rawliteral(
     </div>
 
     <div class="footer">Real-time kinematic adjustments</div>
+    
+    <div style="text-align: center; margin-top: 15px; margin-bottom: 20px;">
+      <button id="gaitBtn" onclick="toggleGait()" style="padding: 12px 24px; border-radius: 8px; border: none; background: var(--primary); color: white; font-weight: bold; font-size: 1rem; cursor: pointer; transition: background 0.2s;">Start Gait Test</button>
+    </div>
   </div>
 
 <script>
@@ -261,6 +265,24 @@ const char index_html[] PROGMEM = R"rawliteral(
         })
         .catch(err => console.error(err));
     }, 50);
+  }
+
+  let isGait = false;
+  
+  function toggleGait() {
+    let btn = document.getElementById("gaitBtn");
+    isGait = !isGait;
+    
+    if (!isGait) {
+      btn.innerText = "Start Gait Test";
+      btn.style.background = "var(--primary)";
+    } else {
+      btn.innerText = "Stop Gait Test";
+      btn.style.background = "#ef4444";
+    }
+    
+    fetch(`/gait?enable=${isGait}`)
+      .catch(err => console.error(err));
   }
 
   window.onload = () => {

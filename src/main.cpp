@@ -37,7 +37,7 @@ struct LegConfig {
 LegConfig legs[1] = {
   { // Front-Left Leg
     {0, 459, 2520, 90.0, true}, // Coxa: pin 0
-    {1, 459, 2640, 90.0, false}, // Femur: pin 1
+    {1, 459, 2640, 80.0, false}, // Femur: pin 1
     {2, 459, 2600, 0.0, false}  // Tibia: pin 2
   }
 };
@@ -47,6 +47,10 @@ LegConfig legs[1] = {
 float targetX = 0.0;
 float targetY = 47.0;
 float targetZ = -90.0;
+
+bool isGaitTest = false;
+unsigned long lastGaitMs = 0;
+int gaitStep = 0;
 
 float currentX = 0.0;
 float currentY = 47.0;
@@ -114,7 +118,7 @@ void calculateIK(float x, float y, float z, float &coxa_angle, float &femur_angl
   tibia_angle = tibia_angle * 180.0 / PI;
 }
 
-void setCalibratedAngle(ServoConfig servo, float angle) {
+void setAngle(ServoConfig servo, float angle) {
   // Apply offset and inversion
   float finalAngle = angle + servo.offset;
   if (servo.invert) {
@@ -135,7 +139,7 @@ void setCalibratedAngle(ServoConfig servo, float angle) {
   pwm.writeMicroseconds(servo.pin, pulseUs);
 }
 
-void updateOLED(float c, float f, float t) {
+void updateScreen(float c, float f, float t) {
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
@@ -165,6 +169,17 @@ void handleSet() {
   if (server.hasArg("y")) targetY = server.arg("y").toFloat();
   if (server.hasArg("z")) targetZ = server.arg("z").toFloat();
   targetUpdated = true;
+  server.send(200, "text/plain", "OK");
+}
+
+void handleGait() {
+  if (server.hasArg("enable")) {
+    isGaitTest = (server.arg("enable") == "true");
+    if(isGaitTest) {
+      gaitStep = 0;
+      lastGaitMs = 0; // force immediate step
+    }
+  }
   server.send(200, "text/plain", "OK");
 }
 
@@ -199,6 +214,7 @@ void setup() {
   // Initialize WebServer
   server.on("/", handleRoot);
   server.on("/set", handleSet);
+  server.on("/gait", handleGait);
   server.begin();
 
   // Initialize PWM
@@ -210,11 +226,29 @@ void setup() {
 void loop() {
   server.handleClient();
 
+  // Gait state machine
+  if (isGaitTest) {
+    if (millis() - lastGaitMs > 500) {
+      lastGaitMs = millis();
+      if (gaitStep == 0) {
+        targetX = 20; targetY = 47; targetZ = -90;
+        gaitStep = 1;
+      } else if (gaitStep == 1) {
+        targetX = 0; targetY = 47; targetZ = -70;
+        gaitStep = 2;
+      } else {
+        targetX = -20; targetY = 27; targetZ = -90;
+        gaitStep = 0;
+      }
+      targetUpdated = true;
+    }
+  }
+
   if (targetUpdated) {
     // Calculate IK for target to update OLED display
     float tCoxa, tFemur, tTibia;
     calculateIK(targetX, targetY, targetZ, tCoxa, tFemur, tTibia);
-    updateOLED(tCoxa, tFemur, tTibia);
+    updateScreen(tCoxa, tFemur, tTibia);
     targetUpdated = false;
   }
 
@@ -248,9 +282,9 @@ void loop() {
       Serial.print(" Tibia: "); Serial.println(tibiaAngle); 
 
       // Write to PCA9685
-      setCalibratedAngle(legs[FL_LEG].coxa, coxaAngle);
-      setCalibratedAngle(legs[FL_LEG].femur, femurAngle);
-      setCalibratedAngle(legs[FL_LEG].tibia, tibiaAngle);
+      setAngle(legs[FL_LEG].coxa, coxaAngle);
+      setAngle(legs[FL_LEG].femur, femurAngle);
+      setAngle(legs[FL_LEG].tibia, tibiaAngle);
     }
   }
 }
