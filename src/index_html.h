@@ -114,9 +114,9 @@ const char index_html[] PROGMEM = R"rawliteral(
     <div class="slider-container">
       <div class="label-row">
         <span>Y-Axis (Lateral)</span>
-        <span class="value-display"><span id="yVal">20</span> mm</span>
+        <span class="value-display"><span id="yVal">17</span> mm</span>
       </div>
-      <input type="range" min="-50" max="150" value="20" id="ySlider" oninput="updateValues()">
+      <input type="range" min="-50" max="150" value="17" id="ySlider" oninput="updateValues()">
     </div>
 
     <div class="slider-container">
@@ -148,6 +148,8 @@ const char index_html[] PROGMEM = R"rawliteral(
     
     <div style="text-align: center; margin-top: 15px; margin-bottom: 20px;">
       <button id="gaitBtn" onclick="toggleGait()" style="padding: 12px 24px; border-radius: 8px; border: none; background: var(--primary); color: white; font-weight: bold; font-size: 1rem; cursor: pointer; transition: background 0.2s;">Start Gait Test</button>
+      <br><br>
+      <button onclick="resetToDefault()" style="padding: 8px 16px; border-radius: 8px; border: none; background: #475569; color: white; cursor: pointer;">Back to Default</button>
     </div>
   </div>
 
@@ -180,6 +182,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   }
 
   function drawLeg(x, y, z) {
+    x = -x; // Flip X-axis so positive X moves forward
     let L_yz = Math.sqrt(y*y + z*z);
     if (L_COXA > L_yz) return; 
     let L_p = Math.sqrt(L_yz*L_yz - L_COXA*L_COXA);
@@ -283,6 +286,13 @@ const char index_html[] PROGMEM = R"rawliteral(
     
     fetch(`/gait?enable=${isGait}`)
       .catch(err => console.error(err));
+  }
+
+  function resetToDefault() {
+    document.getElementById("xSlider").value = 0;
+    document.getElementById("ySlider").value = 17;
+    document.getElementById("zSlider").value = -90;
+    updateValues();
   }
 
   window.onload = () => {

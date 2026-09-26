@@ -29,7 +29,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // --- Leg Dimensions ---
 // Adjust these measurements (in millimeters) to match your physical robot build.
-const float L_COXA = 20;  // Length of the shoulder joint sideways
+const float L_COXA = 17.6;  // Length of the shoulder joint sideways
 const float L_FEMUR = 49.3; // Length of the upper leg
 const float L_TIBIA = 58.0; // Length of the lower leg
 //const float L_TIBIA = 72.0; // Length of the lower leg
@@ -66,7 +66,7 @@ struct LegConfig {
 LegConfig legs[1] = {
   { 
     {0, 459, 2520, 90.0, true},  // Coxa on pin 0
-    {1, 459, 2760, 88.0, false}, // Femur on pin 1
+    {1, 618, 2718, 86.0, false}, // Femur on pin 1
     {2, 464, 2590, 0.0, false}   // Tibia on pin 2
 
     // {0, 459, 2520, 90.0, true},  // Coxa on pin 0
@@ -102,6 +102,11 @@ bool isGaitTest = false;
 unsigned long lastGaitMs = 0;
 int gaitStep = 0;
 
+// Variables for loop profiling
+unsigned long lastHzUpdateMs = 0;
+int loopCounter = 0;
+float loopHz = 0.0;
+
 // ==============================================================================
 // 4. KINEMATICS (The Math Engine)
 // ==============================================================================
@@ -112,6 +117,9 @@ int gaitStep = 0;
  */
 void calculateIK(float x, float y, float z, float &coxa_angle, float &femur_angle, float &tibia_angle) {
   
+  // Flip X axis so that Positive X means "Forward"
+  x = -x;
+
   // 1. Coxa Angle (Looking down from above)
   // Find the straight-line distance to the foot, ignoring the coxa's offset.
   float L_yz = sqrt(y * y + z * z);
@@ -201,6 +209,9 @@ void updateScreen(float c, float f, float t) {
   
   display.setCursor(0, 48);
   display.print(WiFi.localIP());
+  display.print(" | ");
+  display.print((int)loopHz);
+  display.print("Hz");
   display.display();
 }
 
@@ -233,24 +244,38 @@ void handleGait() {
 
 /*
  * updateGaitTest cycles through 3 coordinates to make the leg "walk" in the air.
+ * Now upgraded to be "smart" - it waits for the physical leg to arrive before stepping!
  */
 void updateGaitTest() {
   if (isGaitTest) {
-    if (millis() - lastGaitMs > 500) { // Every half second...
-      lastGaitMs = millis();
-      
-      // Pick the next position in our 3-step sequence
-      if (gaitStep == 0) {
-        targetX = 20; targetY = 20; targetZ = -90; // Step backward
-        gaitStep = 1;
-      } else if (gaitStep == 1) {
-        targetX = 0; targetY = 20; targetZ = -70; // Lift Leg
-        gaitStep = 2;
-      } else {
-        targetX = -20; targetY = -20; targetZ = -90; // Step forward
-        gaitStep = 0;
+    // 1. Check how far the physical leg is from the current target
+    float dx = targetX - currentX;
+    float dy = targetY - currentY;
+    float dz = targetZ - currentZ;
+    float dist = sqrt(dx*dx + dy*dy + dz*dz);
+    
+    // 2. Only proceed to the next step if we have physically arrived! (within 1 millimeter)
+    if (dist < 1.0) {
+      // 3. Tiny pause at the end of each step (e.g., 50ms) before snapping to the next one
+      if (millis() - lastGaitMs > 50) { 
+        lastGaitMs = millis();
+        
+        // Pick the next position in our 3-step sequence
+        if (gaitStep == 0) {
+          targetX = 20; targetY = 20; targetZ = -90; // Step backward
+          gaitStep = 1;
+        } else if (gaitStep == 1) {
+          targetX = -20; targetY = 20; targetZ = -90; // Step forward
+          gaitStep = 2;
+        } else {
+          targetX = 0; targetY = 20; targetZ = -70; // Lift Leg
+          gaitStep = 0;
+        }
+        targetUpdated = true;
       }
-      targetUpdated = true;
+    } else {
+      // If the leg is still moving, constantly reset the pause timer. 
+      lastGaitMs = millis();
     }
   }
 }
@@ -341,6 +366,15 @@ void setup() {
  * We've split the responsibilities into separate functions above so this stays clean!
  */
 void loop() {
+  loopCounter++;
+  unsigned long currentMs = millis();
+  if (currentMs - lastHzUpdateMs >= 1000) {
+    loopHz = loopCounter / ((currentMs - lastHzUpdateMs) / 1000.0);
+    loopCounter = 0;
+    lastHzUpdateMs = currentMs;
+    targetUpdated = true; // force redraw every second to show Hz
+  }
+
   // Check for incoming web requests
   server.handleClient();
 
@@ -357,4 +391,6 @@ void loop() {
 
   // Slowly move the physical motors toward the target
   updateInterpolation();
+
+  delay(10);
 }
