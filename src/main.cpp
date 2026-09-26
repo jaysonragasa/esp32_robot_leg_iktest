@@ -51,7 +51,7 @@ enum LinkageType {
   LINKAGE_SERIAL,   // Tibia motor is mounted on the Femur (Knee angle is local)
   LINKAGE_PARALLEL  // Tibia motor is mounted on the Body (Knee angle is global/absolute)
 };
-LinkageType currentLinkage = LINKAGE_SERIAL; // Default to standard Serial linkage
+LinkageType currentLinkage = LINKAGE_PARALLEL; // Default to standard Serial linkage
 
 
 /*
@@ -83,7 +83,7 @@ LegConfig legs[1] = {
   { 
     {0, 459, 2520, 90.0, true},  // Coxa on pin 0
     {1, 618, 2718, 86.0, false}, // Femur on pin 1
-    {2, 464, 2590, 0.0, false}   // Tibia on pin 2
+    {2, 464, 2590, 0.0, true}   // Tibia on pin 2
 
     // {0, 459, 2520, 90.0, true},  // Coxa on pin 0
     // {1, 459, 2530, 80.0, false}, // Femur on pin 1
@@ -278,6 +278,22 @@ void handleSet() {
   server.send(200, "text/plain", "OK");
 }
 
+void handleConfig() {
+  if (server.hasArg("dof")) {
+    int d = server.arg("dof").toInt();
+    if (d == 1) currentDOF = DOF_1;
+    else if (d == 2) currentDOF = DOF_2;
+    else currentDOF = DOF_3;
+  }
+  if (server.hasArg("linkage")) {
+    int l = server.arg("linkage").toInt();
+    if (l == 1) currentLinkage = LINKAGE_PARALLEL;
+    else currentLinkage = LINKAGE_SERIAL;
+  }
+  targetUpdated = true;
+  server.send(200, "text/plain", "OK");
+}
+
 void handleGait() {
   if (server.hasArg("enable")) {
     isGaitTest = (server.arg("enable") == "true");
@@ -403,6 +419,7 @@ void setup() {
   // 3. Start Web Server
   server.on("/", handleRoot);
   server.on("/set", handleSet);
+  server.on("/config", handleConfig);
   server.on("/gait", handleGait);
   server.begin();
 

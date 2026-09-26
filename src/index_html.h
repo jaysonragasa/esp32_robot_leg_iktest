@@ -103,6 +103,26 @@ const char index_html[] PROGMEM = R"rawliteral(
     <h1>AskalBot</h1>
     <p class="subtitle">3DOF Leg IK Controller</p>
 
+    <div class="slider-container" style="margin-bottom: 1.5rem;">
+      <div style="display: flex; justify-content: space-between; gap: 10px;">
+        <div style="width: 50%; text-align: left;">
+          <div style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; color: var(--text-muted);">Degrees of Freedom</div>
+          <select id="dofSelect" onchange="updateConfig()" style="width: 100%; padding: 6px; background: #334155; color: white; border: none; border-radius: 4px; font-size: 0.85rem;">
+            <option value="3">3-DOF (Full 3D)</option>
+            <option value="2">2-DOF (Flat 2D)</option>
+            <option value="1">1-DOF (Stick)</option>
+          </select>
+        </div>
+        <div style="width: 50%; text-align: left;">
+          <div style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; color: var(--text-muted);">Linkage Type</div>
+          <select id="linkageSelect" onchange="updateConfig()" style="width: 100%; padding: 6px; background: #334155; color: white; border: none; border-radius: 4px; font-size: 0.85rem;">
+            <option value="1">Parallel (Knee on Body)</option>
+            <option value="0">Serial (Knee on Femur)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <div class="slider-container">
       <div class="label-row">
         <span>X-Axis (Forward)</span>
@@ -181,23 +201,51 @@ const char index_html[] PROGMEM = R"rawliteral(
     return [rotateX(p0, coxa_a), rotateX(p1, coxa_a), rotateX(p2, coxa_a), rotateX(p3, coxa_a)];
   }
 
+  let ui_dof = 3;
+  let ui_linkage = 1; // Default to parallel based on your setup
+
   function drawLeg(x, y, z) {
     x = -x; // Flip X-axis so positive X moves forward
-    let L_yz = Math.sqrt(y*y + z*z);
-    if (L_COXA > L_yz) return; 
-    let L_p = Math.sqrt(L_yz*L_yz - L_COXA*L_COXA);
     
-    let coxa_a = Math.atan2(y, -z) - Math.atan2(L_COXA, L_p);
-    let D_sq = x*x + L_p*L_p;
-    let D = Math.sqrt(D_sq);
+    let coxa_a = 0, femur_a = 0, tibia_a = 0;
 
-    let cos_tibia = (D_sq - L_FEMUR*L_FEMUR - L_TIBIA*L_TIBIA) / (2.0 * L_FEMUR * L_TIBIA);
-    cos_tibia = Math.max(-1.0, Math.min(1.0, cos_tibia));
-    let tibia_a = -Math.acos(cos_tibia);
+    if (ui_dof === 3) {
+      let L_yz = Math.sqrt(y*y + z*z);
+      if (L_COXA > L_yz) return; 
+      let L_p = Math.sqrt(L_yz*L_yz - L_COXA*L_COXA);
+      
+      coxa_a = Math.atan2(y, -z) - Math.atan2(L_COXA, L_p);
+      let D_sq = x*x + L_p*L_p;
+      let D = Math.sqrt(D_sq);
 
-    let cos_femur = (L_FEMUR*L_FEMUR + D_sq - L_TIBIA*L_TIBIA) / (2.0 * L_FEMUR * D);
-    cos_femur = Math.max(-1.0, Math.min(1.0, cos_femur));
-    let femur_a = Math.atan2(x, L_p) + Math.acos(cos_femur);
+      let cos_tibia = (D_sq - L_FEMUR*L_FEMUR - L_TIBIA*L_TIBIA) / (2.0 * L_FEMUR * L_TIBIA);
+      cos_tibia = Math.max(-1.0, Math.min(1.0, cos_tibia));
+      tibia_a = -Math.acos(cos_tibia);
+
+      let cos_femur = (L_FEMUR*L_FEMUR + D_sq - L_TIBIA*L_TIBIA) / (2.0 * L_FEMUR * D);
+      cos_femur = Math.max(-1.0, Math.min(1.0, cos_femur));
+      femur_a = Math.atan2(x, L_p) + Math.acos(cos_femur);
+
+    } else if (ui_dof === 2) {
+      let D_sq = x*x + z*z;
+      let D = Math.sqrt(D_sq);
+
+      let cos_tibia = (D_sq - L_FEMUR*L_FEMUR - L_TIBIA*L_TIBIA) / (2.0 * L_FEMUR * L_TIBIA);
+      cos_tibia = Math.max(-1.0, Math.min(1.0, cos_tibia));
+      tibia_a = -Math.acos(cos_tibia);
+
+      let cos_femur = (L_FEMUR*L_FEMUR + D_sq - L_TIBIA*L_TIBIA) / (2.0 * L_FEMUR * D);
+      cos_femur = Math.max(-1.0, Math.min(1.0, cos_femur));
+      femur_a = Math.atan2(x, -z) + Math.acos(cos_femur);
+
+    } else if (ui_dof === 1) {
+      femur_a = Math.atan2(x, -z);
+    }
+
+    let display_tibia = tibia_a;
+    if (ui_linkage === 1) {
+      display_tibia = tibia_a + femur_a;
+    }
 
     // Update angle text displays
     let elCoxa = document.getElementById("coxaAngleVal");
@@ -205,7 +253,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     let elFemur = document.getElementById("femurAngleVal");
     if(elFemur) elFemur.innerText = (femur_a * 180 / Math.PI).toFixed(2);
     let elTibia = document.getElementById("tibiaAngleVal");
-    if(elTibia) elTibia.innerText = (tibia_a * 180 / Math.PI).toFixed(2);
+    if(elTibia) elTibia.innerText = (display_tibia * 180 / Math.PI).toFixed(2);
 
     let pts = calculateFK(coxa_a, femur_a, tibia_a);
 
@@ -244,6 +292,14 @@ const char index_html[] PROGMEM = R"rawliteral(
     // Draw Side (X) and Front (Y) views
     drawView("sideCanvas", 75, 20, "x", "#3b82f6");
     drawView("frontCanvas", 40, 20, "y", "#a78bfa");
+  }
+
+  function updateConfig() {
+    ui_dof = parseInt(document.getElementById("dofSelect").value);
+    ui_linkage = parseInt(document.getElementById("linkageSelect").value);
+    fetch(`/config?dof=${ui_dof}&linkage=${ui_linkage}`)
+      .catch(err => console.error(err));
+    updateValues(); // Redraw UI
   }
 
   let timeout = null;
