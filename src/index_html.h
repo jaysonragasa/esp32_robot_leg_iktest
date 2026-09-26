@@ -6,6 +6,7 @@
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
 <head>
+  <meta charset="UTF-8">
   <title>AskalBot Leg Controller</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
@@ -123,6 +124,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     }
     .btn-danger { background: var(--danger); }
     .btn-success { background: var(--success); }
+    .btn-secondary { background: #475569; }
     
     .sequence-item {
       background: #0f172a;
@@ -133,17 +135,33 @@ const char index_html[] PROGMEM = R"rawliteral(
       justify-content: space-between;
       align-items: center;
       font-size: 0.9rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background 0.2s, border 0.2s;
+    }
+    .sequence-item:hover {
+      background: #1e293b;
+    }
+    .sequence-item.editing {
+      border: 1px solid var(--primary);
+      background: #1e293b;
+    }
+    .sequence-item.dragging {
+      opacity: 0.5;
+      background: #334155;
+      border: 1px dashed var(--primary);
     }
     .sequence-coords {
       color: #cbd5e1;
       font-family: monospace;
+      font-size: 0.8rem;
     }
     .sequence-actions {
       display: flex;
       gap: 8px;
     }
     .seq-list-container {
-      max-height: 400px;
+      max-height: 480px;
       overflow-y: auto;
       margin-bottom: 20px;
       padding-right: 5px;
@@ -154,6 +172,18 @@ const char index_html[] PROGMEM = R"rawliteral(
     .seq-list-container::-webkit-scrollbar-thumb {
       background: #334155;
       border-radius: 3px;
+    }
+    
+    .mini-canvas-container {
+      display: flex;
+      gap: 5px;
+      margin: 0 10px;
+    }
+    .mini-canvas {
+      width: 40px;
+      height: 40px;
+      background: #000;
+      border-radius: 4px;
     }
   </style>
 </head>
@@ -205,8 +235,12 @@ const char index_html[] PROGMEM = R"rawliteral(
         <div>Tibia: <span id="tibiaAngleVal" style="color: var(--primary); font-weight: bold;">0.00</span>&deg;</div>
       </div>
 
-      <div style="text-align: center; margin-top: 15px;">
-        <button onclick="addToSequence()" style="width: 100%;">Add To Sequence</button>
+      <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <button id="addBtn" onclick="handleAddOrUpdate()" style="flex: 1;">Add To Sequence</button>
+        <button id="cancelBtn" onclick="setEditing(-1)" class="btn-secondary" style="display: none;">Cancel</button>
+      </div>
+      <div style="margin-top: 10px;">
+        <button onclick="resetToDefault()" class="btn-secondary" style="width: 100%;">Back to Default</button>
       </div>
     </div>
 
@@ -252,11 +286,11 @@ const char index_html[] PROGMEM = R"rawliteral(
     return [rotateX(p0, coxa_a), rotateX(p1, coxa_a), rotateX(p2, coxa_a), rotateX(p3, coxa_a)];
   }
 
-  function drawLeg(x, y, z) {
+  function getPoints(x, y, z) {
+    x = -x; // Flip X axis so positive means forward
     let L_yz = Math.sqrt(y*y + z*z);
-    if (L_COXA > L_yz) return; 
+    if (L_COXA > L_yz) return null; 
     let L_p = Math.sqrt(L_yz*L_yz - L_COXA*L_COXA);
-    
     let coxa_a = Math.atan2(y, -z) - Math.atan2(L_COXA, L_p);
     let D_sq = x*x + L_p*L_p;
     let D = Math.sqrt(D_sq);
@@ -268,15 +302,21 @@ const char index_html[] PROGMEM = R"rawliteral(
     let cos_femur = (L_FEMUR*L_FEMUR + D_sq - L_TIBIA*L_TIBIA) / (2.0 * L_FEMUR * D);
     cos_femur = Math.max(-1.0, Math.min(1.0, cos_femur));
     let femur_a = Math.atan2(x, L_p) + Math.acos(cos_femur);
+    
+    // Also save angles to UI if this is the main visualizer
+    return { pts: calculateFK(coxa_a, femur_a, tibia_a), coxa_a, femur_a, tibia_a };
+  }
 
+  function drawLeg(x, y, z) {
+    let data = getPoints(x, y, z);
+    if (!data) return;
+    
     let elCoxa = document.getElementById("coxaAngleVal");
-    if(elCoxa) elCoxa.innerText = (coxa_a * 180 / Math.PI).toFixed(2);
+    if(elCoxa) elCoxa.innerText = (data.coxa_a * 180 / Math.PI).toFixed(2);
     let elFemur = document.getElementById("femurAngleVal");
-    if(elFemur) elFemur.innerText = (femur_a * 180 / Math.PI).toFixed(2);
+    if(elFemur) elFemur.innerText = (data.femur_a * 180 / Math.PI).toFixed(2);
     let elTibia = document.getElementById("tibiaAngleVal");
-    if(elTibia) elTibia.innerText = (tibia_a * 180 / Math.PI).toFixed(2);
-
-    let pts = calculateFK(coxa_a, femur_a, tibia_a);
+    if(elTibia) elTibia.innerText = (data.tibia_a * 180 / Math.PI).toFixed(2);
 
     let drawView = (id, tx, ty, axisX, color) => {
       let canvas = document.getElementById(id);
@@ -290,8 +330,8 @@ const char index_html[] PROGMEM = R"rawliteral(
       ctx.fillRect(-4, -4, 8, 8);
 
       ctx.beginPath();
-      ctx.moveTo(pts[0][axisX], -pts[0].z);
-      for(let i=1; i<4; i++) ctx.lineTo(pts[i][axisX], -pts[i].z);
+      ctx.moveTo(data.pts[0][axisX], -data.pts[0].z);
+      for(let i=1; i<4; i++) ctx.lineTo(data.pts[i][axisX], -data.pts[i].z);
       ctx.strokeStyle = color;
       ctx.lineWidth = 4;
       ctx.lineJoin = "round";
@@ -299,7 +339,7 @@ const char index_html[] PROGMEM = R"rawliteral(
       ctx.stroke();
       
       ctx.fillStyle = "#f8fafc";
-      for(let p of pts) {
+      for(let p of data.pts) {
         ctx.beginPath();
         ctx.arc(p[axisX], -p.z, 3.5, 0, Math.PI*2);
         ctx.fill();
@@ -309,6 +349,26 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     drawView("sideCanvas", 75, 20, "x", "#3b82f6");
     drawView("frontCanvas", 40, 20, "y", "#a78bfa");
+  }
+
+  function drawMiniView(id, pts, tx, ty, axisX, color) {
+    let canvas = document.getElementById(id);
+    if(!canvas) return;
+    let ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, 40, 40);
+    ctx.save();
+    ctx.scale(0.26, 0.26); // scale down 150px space to 40px
+    ctx.translate(tx, ty);
+    
+    ctx.beginPath();
+    ctx.moveTo(pts[0][axisX], -pts[0].z);
+    for(let i=1; i<4; i++) ctx.lineTo(pts[i][axisX], -pts[i].z);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 15;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.restore();
   }
 
   let timeout = null;
@@ -342,26 +402,62 @@ const char index_html[] PROGMEM = R"rawliteral(
     {x: -20, y: 17, z: -90}
   ];
   let isGait = false;
+  let editingIndex = -1;
 
-  function addToSequence() {
+  function setEditing(index) {
+    if (isGait) return;
+    editingIndex = index;
+    if (index !== -1) {
+      let step = sequence[index];
+      document.getElementById("xSlider").value = step.x;
+      document.getElementById("ySlider").value = step.y;
+      document.getElementById("zSlider").value = step.z;
+      document.getElementById("addBtn").innerText = "Update Step " + (index + 1);
+      document.getElementById("cancelBtn").style.display = "inline-block";
+    } else {
+      document.getElementById("addBtn").innerText = "Add To Sequence";
+      document.getElementById("cancelBtn").style.display = "none";
+    }
+    updateValues();
+    renderSequence();
+  }
+
+  function handleAddOrUpdate() {
     var x = parseFloat(document.getElementById("xSlider").value);
     var y = parseFloat(document.getElementById("ySlider").value);
     var z = parseFloat(document.getElementById("zSlider").value);
-    sequence.push({x, y, z});
-    renderSequence();
+    if (editingIndex !== -1) {
+      sequence[editingIndex] = {x, y, z};
+      setEditing(-1); // reset editing state
+    } else {
+      sequence.push({x, y, z});
+      renderSequence();
+    }
   }
 
-  function deleteStep(index) {
+  function deleteStep(index, e) {
+    e.stopPropagation(); // prevent row click
     sequence.splice(index, 1);
-    renderSequence();
+    if (editingIndex === index) setEditing(-1);
+    else if (editingIndex > index) setEditing(editingIndex - 1);
+    else renderSequence();
   }
 
-  function playStep(index) {
+  function playStep(index, e) {
+    e.stopPropagation(); // prevent row click
     if (isGait) return;
     let step = sequence[index];
     document.getElementById("xSlider").value = step.x;
     document.getElementById("ySlider").value = step.y;
     document.getElementById("zSlider").value = step.z;
+    updateValues();
+  }
+
+  function resetToDefault() {
+    if (isGait) return;
+    document.getElementById("xSlider").value = 0;
+    document.getElementById("ySlider").value = 17;
+    document.getElementById("zSlider").value = -90;
     updateValues();
   }
 
@@ -376,18 +472,75 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     sequence.forEach((step, index) => {
       let div = document.createElement("div");
-      div.className = "sequence-item";
+      div.className = "sequence-item" + (editingIndex === index ? " editing" : "");
+      div.dataset.index = index;
+      if (!isGait) div.draggable = true;
+      
+      div.onclick = () => setEditing(index);
+      
+      div.addEventListener('dragstart', (e) => {
+        if (isGait) { e.preventDefault(); return; }
+        e.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => div.classList.add('dragging'), 0);
+      });
+      
+      div.addEventListener('dragend', () => {
+        div.classList.remove('dragging');
+        
+        let newSequence = [];
+        let newEditingIndex = -1;
+        const listItems = document.getElementById("sequenceList").querySelectorAll('.sequence-item');
+        listItems.forEach((item, i) => {
+          let oldIndex = parseInt(item.dataset.index);
+          newSequence.push(sequence[oldIndex]);
+          if (oldIndex === editingIndex) {
+            newEditingIndex = i;
+          }
+        });
+        sequence = newSequence;
+        editingIndex = newEditingIndex;
+        renderSequence(); 
+      });
+      
+      div.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const draggingEl = document.querySelector('.dragging');
+        if (!draggingEl || draggingEl === div) return;
+        
+        const bounding = div.getBoundingClientRect();
+        const offset = e.clientY - bounding.top;
+        if (offset > bounding.height / 2) {
+          div.parentNode.insertBefore(draggingEl, div.nextSibling);
+        } else {
+          div.parentNode.insertBefore(draggingEl, div);
+        }
+      });
+      
       div.innerHTML = `
-        <div class="sequence-coords">
-          <span style="display:inline-block; width:15px; color:var(--text-muted)">${index+1}.</span> 
-          X:${step.x} Y:${step.y} Z:${step.z}
+        <div style="display:flex; align-items:center; gap: 8px;">
+          <span style="display:inline-block; color:var(--text-muted); font-weight:bold; cursor:grab; margin-right: 5px;">&#9776;</span>
+          <span style="display:inline-block; width:15px; color:var(--text-muted); font-weight:bold;">${index+1}.</span> 
+          <div class="mini-canvas-container">
+            <canvas id="miniSide_${index}" class="mini-canvas" width="40" height="40"></canvas>
+            <canvas id="miniFront_${index}" class="mini-canvas" width="40" height="40"></canvas>
+          </div>
+          <div class="sequence-coords">
+            X: ${step.x}<br>Y: ${step.y}<br>Z: ${step.z}
+          </div>
         </div>
         <div class="sequence-actions">
-          <button class="btn-small" onclick="playStep(${index})" ${isGait ? 'disabled' : ''}>Play</button>
-          <button class="btn-small btn-danger" onclick="deleteStep(${index})">X</button>
+          <button class="btn-small" onclick="playStep(${index}, event)" ${isGait ? 'disabled' : ''}>Play</button>
+          <button class="btn-small btn-danger" onclick="deleteStep(${index}, event)">X</button>
         </div>
       `;
       list.appendChild(div);
+      
+      // Draw the mini canvases right after appending
+      let data = getPoints(step.x, step.y, step.z);
+      if (data) {
+        drawMiniView("miniSide_"+index, data.pts, 75, 20, "x", "#3b82f6");
+        drawMiniView("miniFront_"+index, data.pts, 40, 20, "y", "#a78bfa");
+      }
     });
   }
 
@@ -399,18 +552,18 @@ const char index_html[] PROGMEM = R"rawliteral(
       btn.innerText = "Play Gait";
       btn.className = "btn-success";
       fetch(`/gait?enable=false`).catch(err => console.error(err));
-      renderSequence(); // re-enable play buttons
+      renderSequence(); 
     } else {
       if (sequence.length === 0) {
         alert("Add some steps first!");
         isGait = false;
         return;
       }
+      setEditing(-1); // stop editing if we start gait
       btn.innerText = "Stop Gait";
       btn.className = "btn-danger";
-      renderSequence(); // disable play buttons
+      renderSequence(); 
       
-      // Format sequence as: x,y,z;x,y,z;...
       let seqString = sequence.map(s => `${s.x},${s.y},${s.z}`).join(';');
       
       fetch('/upload_gait', {
@@ -418,7 +571,7 @@ const char index_html[] PROGMEM = R"rawliteral(
         body: seqString
       }).catch(err => {
         console.error(err);
-        toggleGait(); // Revert on fail
+        toggleGait(); 
       });
     }
   }

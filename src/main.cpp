@@ -116,6 +116,9 @@ int gaitSequenceLength = 0;
  */
 void calculateIK(float x, float y, float z, float &coxa_angle, float &femur_angle, float &tibia_angle) {
   
+  // Flip X axis so that Positive X means "Forward"
+  x = -x;
+
   // 1. Coxa Angle (Looking down from above)
   // Find the straight-line distance to the foot, ignoring the coxa's offset.
   float L_yz = sqrt(y * y + z * z);
