@@ -66,7 +66,7 @@ struct LegConfig {
 LegConfig legs[1] = {
   { 
     {0, 459, 2520, 90.0, true},  // Coxa on pin 0
-    {1, 459, 2640, 88.0, false}, // Femur on pin 1
+    {1, 618, 2718, 86.0, false}, // Femur on pin 1
     {2, 464, 2590, 0.0, false}   // Tibia on pin 2
 
     // {0, 459, 2520, 90.0, true},  // Coxa on pin 0
@@ -277,22 +277,39 @@ void handleUploadGait() {
 
 /*
  * updateGaitTest cycles through the uploaded coordinate sequence to make the leg "walk".
+ * Now upgraded to be "smart" - it waits for the physical leg to arrive before stepping!
  */
 void updateGaitTest() {
   if (isGaitTest && gaitSequenceLength > 0) {
-    if (millis() - lastGaitMs > 500) { // Every half second...
-      lastGaitMs = millis();
+    
+    // 1. Check how far the physical leg is from the current target
+    float dx = targetX - currentX;
+    float dy = targetY - currentY;
+    float dz = targetZ - currentZ;
+    float dist = sqrt(dx*dx + dy*dy + dz*dz);
+    
+    // 2. Only proceed to the next step if we have physically arrived! (within 1 millimeter)
+    if (dist < 1.0) { 
       
-      targetX = gaitSequence[gaitStep].x;
-      targetY = gaitSequence[gaitStep].y;
-      targetZ = gaitSequence[gaitStep].z;
-      
-      gaitStep++;
-      if (gaitStep >= gaitSequenceLength) {
-        gaitStep = 0;
+      // 3. Tiny pause at the end of each step (e.g., 50ms) before snapping to the next one
+      if (millis() - lastGaitMs > 50) { 
+        lastGaitMs = millis();
+        
+        targetX = gaitSequence[gaitStep].x;
+        targetY = gaitSequence[gaitStep].y;
+        targetZ = gaitSequence[gaitStep].z;
+        
+        gaitStep++;
+        if (gaitStep >= gaitSequenceLength) {
+          gaitStep = 0;
+        }
+        
+        targetUpdated = true;
       }
-      
-      targetUpdated = true;
+    } else {
+      // If the leg is still moving, constantly reset the pause timer. 
+      // This ensures our 50ms pause only starts counting AFTER the leg has arrived!
+      lastGaitMs = millis();
     }
   }
 }
@@ -409,4 +426,6 @@ void loop() {
 
   // Slowly move the physical motors toward the target
   updateInterpolation();
+
+  delay(10);
 }
