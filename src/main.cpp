@@ -221,14 +221,16 @@ void setAngle(ServoConfig servo, float angle) {
   // 1. Apply our manual tuning offset
   float desiredAngle = angle + servo.offset;
   
-  // 2. Invert direction if this specific motor is mounted backwards
+  // 2. Handle negative angles gracefully (this acts as a mirror around 0)
+  // We do this BEFORE the invert, so the invert logic (180 - angle) doesn't break
+  desiredAngle = abs(desiredAngle);
+
+  // 3. Invert direction if this specific motor is mounted backwards
   if (servo.invert) {
     desiredAngle = 180.0f - desiredAngle;
   }
 
-  // 3. Safety checks! Don't let negative numbers break the motor, 
-  // and strictly limit it between 0 and 180 degrees.
-  desiredAngle = abs(desiredAngle);
+  // 4. Safety checks! strictly limit it between 0 and 180 degrees.
   desiredAngle = fmax(0.0f, fmin(180.0f, desiredAngle));
 
   // 4. Convert the safe 0-180 degree angle into electronic pulse timings (Microseconds)
