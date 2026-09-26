@@ -398,8 +398,8 @@ const char index_html[] PROGMEM = R"rawliteral(
   // --- Sequence Editor Logic ---
   let sequence = [
     {x: 20, y: 17, z: -90},
-    {x: 0, y: 17, z: -70},
-    {x: -20, y: 17, z: -90}
+    {x: -20, y: 17, z: -90},
+    {x: 0, y: 17, z: -70}
   ];
   let isGait = false;
   let editingIndex = -1;
