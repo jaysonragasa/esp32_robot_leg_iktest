@@ -29,8 +29,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // --- Leg Dimensions ---
 // Adjust these measurements (in millimeters) to match your physical robot build.
-const float L_COXA = 47.0;  // Length of the shoulder joint sideways
-const float L_FEMUR = 50.0; // Length of the upper leg
+const float L_COXA = 20;  // Length of the shoulder joint sideways
+const float L_FEMUR = 49.3; // Length of the upper leg
 const float L_TIBIA = 58.0; // Length of the lower leg
 //const float L_TIBIA = 72.0; // Length of the lower leg
 
@@ -82,14 +82,14 @@ LegConfig legs[1] = {
 
 // Where we WANT the leg to go (Target Position)
 float targetX = 0.0;
-float targetY = 47.0;
+float targetY = 20.0;
 float targetZ = -90.0;
 bool targetUpdated = true; // True if we received a new target
 
 // Where the leg CURRENTLY is (Current Position)
 // We use this to slowly move towards the target (Interpolation)
 float currentX = 0.0;
-float currentY = 47.0;
+float currentY = 20.0;
 float currentZ = -90.0;
 
 // Variables for the smooth movement loop
@@ -241,13 +241,13 @@ void updateGaitTest() {
       
       // Pick the next position in our 3-step sequence
       if (gaitStep == 0) {
-        targetX = 20; targetY = 47; targetZ = -90; // Step Forward
+        targetX = 20; targetY = 20; targetZ = -90; // Step backward
         gaitStep = 1;
       } else if (gaitStep == 1) {
-        targetX = 0; targetY = 47; targetZ = -70; // Lift Leg
+        targetX = 0; targetY = 20; targetZ = -70; // Lift Leg
         gaitStep = 2;
       } else {
-        targetX = -20; targetY = 27; targetZ = -90; // Step Backward
+        targetX = -20; targetY = -20; targetZ = -90; // Step forward
         gaitStep = 0;
       }
       targetUpdated = true;

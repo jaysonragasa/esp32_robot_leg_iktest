@@ -114,9 +114,9 @@ const char index_html[] PROGMEM = R"rawliteral(
     <div class="slider-container">
       <div class="label-row">
         <span>Y-Axis (Lateral)</span>
-        <span class="value-display"><span id="yVal">47</span> mm</span>
+        <span class="value-display"><span id="yVal">20</span> mm</span>
       </div>
-      <input type="range" min="-50" max="150" value="47" id="ySlider" oninput="updateValues()">
+      <input type="range" min="-50" max="150" value="20" id="ySlider" oninput="updateValues()">
     </div>
 
     <div class="slider-container">
@@ -152,8 +152,8 @@ const char index_html[] PROGMEM = R"rawliteral(
   </div>
 
 <script>
-  const L_COXA = 47.0;
-  const L_FEMUR = 50.0;
+  const L_COXA = 20;
+  const L_FEMUR = 49.3;
   const L_TIBIA = 58.0;
 
   function calculateFK(coxa_a, femur_a, tibia_a) {
