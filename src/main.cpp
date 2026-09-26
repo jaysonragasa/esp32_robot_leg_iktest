@@ -38,6 +38,15 @@ const float L_TIBIA = 58.0; // Length of the lower leg
 // 2. DATA STRUCTURES (Structuring our variables)
 // ==============================================================================
 
+// How many motors is the leg actually using?
+enum LegDegreesOfFreedom {
+  DOF_1, // Femur only (Swing like a stick)
+  DOF_2, // Femur + Tibia (Forward/Backward and Up/Down, no side-to-side)
+  DOF_3  // Coxa + Femur + Tibia (Full 3D movement)
+};
+LegDegreesOfFreedom currentDOF = DOF_3; // Default to 3DOF
+
+
 /*
  * ServoConfig holds the calibration data for a single physical motor.
  * - minUs / maxUs: The pulse lengths (in microseconds) that map to 0 and 180 degrees.
@@ -120,38 +129,66 @@ void calculateIK(float x, float y, float z, float &coxa_angle, float &femur_angl
   // Flip X axis so that Positive X means "Forward"
   x = -x;
 
-  // 1. Coxa Angle (Looking down from above)
-  // Find the straight-line distance to the foot, ignoring the coxa's offset.
-  float L_yz = sqrt(y * y + z * z);
-  float L_p = sqrt(L_yz * L_yz - L_COXA * L_COXA);
-  
-  // Use basic trigonometry (atan2) to find the shoulder rotation.
-  float alpha_coxa = atan2(y, -z);
-  float beta_coxa = atan2(L_COXA, L_p);
-  coxa_angle = alpha_coxa - beta_coxa;
+  if (currentDOF == DOF_3) {
+    // ----------------------------------------------------
+    // 3-DOF MATH (Coxa, Femur, Tibia)
+    // ----------------------------------------------------
+    
+    // 1. Coxa Angle
+    float L_yz = sqrt(y * y + z * z);
+    float L_p = sqrt(L_yz * L_yz - L_COXA * L_COXA);
+    float alpha_coxa = atan2(y, -z);
+    float beta_coxa = atan2(L_COXA, L_p);
+    coxa_angle = alpha_coxa - beta_coxa;
 
-  // 2. Tibia Angle (The Knee)
-  // Find the diagonal distance from the hip joint to the foot.
-  float D_squared = x * x + L_p * L_p;
-  float D = sqrt(D_squared);
-  
-  // Use the Law of Cosines to figure out how much the knee needs to bend.
-  float cos_tibia = (D_squared - L_FEMUR * L_FEMUR - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * L_TIBIA);
-  
-  // constrain() prevents math errors if we ask the leg to reach too far.
-  cos_tibia = constrain(cos_tibia, -1.0, 1.0); 
-  
-  // We use a negative angle here to create a "bent backward" elbow shape ( > )
-  tibia_angle = -acos(cos_tibia); 
+    // 2. Tibia Angle
+    float D_squared = x * x + L_p * L_p;
+    float D = sqrt(D_squared);
+    float cos_tibia = (D_squared - L_FEMUR * L_FEMUR - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * L_TIBIA);
+    cos_tibia = constrain(cos_tibia, -1.0, 1.0); 
+    tibia_angle = -acos(cos_tibia); 
 
-  // 3. Femur Angle (The Hip)
-  // Use the Law of Cosines again to find the inner triangle angle of the hip.
-  float alpha_femur = atan2(x, L_p);
-  float cos_femur = (L_FEMUR * L_FEMUR + D_squared - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * D);
-  cos_femur = constrain(cos_femur, -1.0, 1.0);
-  float beta_femur = acos(cos_femur);
-  
-  femur_angle = alpha_femur + beta_femur; 
+    // 3. Femur Angle
+    float alpha_femur = atan2(x, L_p);
+    float cos_femur = (L_FEMUR * L_FEMUR + D_squared - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * D);
+    cos_femur = constrain(cos_femur, -1.0, 1.0);
+    float beta_femur = acos(cos_femur);
+    femur_angle = alpha_femur + beta_femur; 
+
+  } else if (currentDOF == DOF_2) {
+    // ----------------------------------------------------
+    // 2-DOF MATH (Femur, Tibia only - Y is ignored)
+    // ----------------------------------------------------
+    
+    coxa_angle = 0.0; // No shoulder rotation
+
+    // D is purely hypotenuse of X and Z.
+    float D_squared = x * x + z * z;
+    float D = sqrt(D_squared);
+
+    // Tibia Angle
+    float cos_tibia = (D_squared - L_FEMUR * L_FEMUR - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * L_TIBIA);
+    cos_tibia = constrain(cos_tibia, -1.0, 1.0); 
+    tibia_angle = -acos(cos_tibia); 
+
+    // Femur Angle
+    float alpha_femur = atan2(x, -z);
+    float cos_femur = (L_FEMUR * L_FEMUR + D_squared - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * D);
+    cos_femur = constrain(cos_femur, -1.0, 1.0);
+    float beta_femur = acos(cos_femur);
+    femur_angle = alpha_femur + beta_femur; 
+
+  } else if (currentDOF == DOF_1) {
+    // ----------------------------------------------------
+    // 1-DOF MATH (Femur only - Just point at the target)
+    // ----------------------------------------------------
+    
+    coxa_angle = 0.0;
+    tibia_angle = 0.0;
+    
+    // Just point the femur at the X, Z coordinate
+    femur_angle = atan2(x, -z);
+  }
 
   // 4. Convert math results (Radians) to standard Motor angles (Degrees)
   coxa_angle = coxa_angle * 180.0 / PI;
