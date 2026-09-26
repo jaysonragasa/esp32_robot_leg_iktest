@@ -31,8 +31,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 // Adjust these measurements (in millimeters) to match your physical robot build.
 const float L_COXA = 17.6;  // Length of the shoulder joint sideways
 const float L_FEMUR = 49.3; // Length of the upper leg
-const float L_TIBIA = 58.0; // Length of the lower leg
-//const float L_TIBIA = 72.0; // Length of the lower leg
+//const float L_TIBIA = 58.0; // Length of the lower leg
+const float L_TIBIA = 72.0; // Length of the lower leg
 
 // ==============================================================================
 // 2. DATA STRUCTURES (Structuring our variables)
@@ -78,18 +78,37 @@ struct LegConfig {
   ServoConfig tibia;
 };
 
-// We are prototyping just the Front-Left leg for now.
+// ==============================================================================
+// 3. SERVO CONFIGURATION (Choose your hardware)
+// ==============================================================================
+
+// Uncomment exactly ONE of the lines below to choose your servo type!
+//#define SERVO_TYPE_MG996R
+#define SERVO_TYPE_MG90S
+
+#if defined(SERVO_TYPE_MG90S)
+// Configuration for the smaller MG90S micro servos (Custom Tuned)
 LegConfig legs[1] = {
   { 
     {0, 459, 2520, 90.0, true},  // Coxa on pin 0
     {1, 618, 2718, 86.0, false}, // Femur on pin 1
-    {2, 464, 2590, 0.0, true}   // Tibia on pin 2
-
-    // {0, 459, 2520, 90.0, true},  // Coxa on pin 0
-    // {1, 459, 2530, 80.0, false}, // Femur on pin 1
-    // {2, 459, 2580, 90.0, false}   // Tibia on pin 2
+    {2, 464, 2590, 0.0, true}    // Tibia on pin 2
   }
 };
+
+#elif defined(SERVO_TYPE_MG996R)
+// Configuration for the big TowerPro MG996R servos (Standard Timing)
+LegConfig legs[1] = {
+  { 
+    {0, 500, 2500, 90.0, true},  // Coxa on pin 0
+    {1, 500, 2500, 80.0, false}, // Femur on pin 1
+    {2, 500, 2500, 90.0, false}  // Tibia on pin 2
+  }
+};
+
+#else
+#error "Please uncomment a servo type at the top of the config!"
+#endif
 #define FL_LEG 0 // A friendly name for index 0
 
 // ==============================================================================

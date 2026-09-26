@@ -46,11 +46,11 @@ const char index_html[] PROGMEM = R"rawliteral(
     }
     p.subtitle {
       color: var(--text-muted);
-      margin-bottom: 2rem;
-      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
     }
     .slider-container {
-      margin-bottom: 2rem;
+      margin-bottom: 1rem;
       text-align: left;
     }
     .label-row {
@@ -147,7 +147,7 @@ const char index_html[] PROGMEM = R"rawliteral(
       <input type="range" min="-120" max="-20" value="-90" id="zSlider" oninput="updateValues()">
     </div>
     
-    <div class="canvas-container" style="display: flex; justify-content: space-between; margin-bottom: 1.5rem;">
+    <div class="canvas-container" style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
       <div style="text-align: center; width: 48%;">
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Side View (X-Z)</div>
         <canvas id="sideCanvas" width="150" height="150" style="background: #0f172a; border-radius: 8px; width: 100%; max-width: 150px;"></canvas>
@@ -158,19 +158,18 @@ const char index_html[] PROGMEM = R"rawliteral(
       </div>
     </div>
     
-    <div class="angles-container" style="display: flex; justify-content: space-between; margin-bottom: 1.5rem; background: #0f172a; padding: 10px; border-radius: 8px; font-size: 0.85rem; color: #cbd5e1;">
+    <div class="angles-container" style="display: flex; justify-content: space-between; margin-bottom: 1rem; background: #0f172a; padding: 8px; border-radius: 8px; font-size: 0.8rem; color: #cbd5e1;">
       <div>Coxa: <span id="coxaAngleVal" style="color: var(--primary); font-weight: bold;">0.00</span>&deg;</div>
       <div>Femur: <span id="femurAngleVal" style="color: var(--primary); font-weight: bold;">0.00</span>&deg;</div>
       <div>Tibia: <span id="tibiaAngleVal" style="color: var(--primary); font-weight: bold;">0.00</span>&deg;</div>
     </div>
 
-    <div class="footer">Real-time kinematic adjustments</div>
-    
-    <div style="text-align: center; margin-top: 15px; margin-bottom: 20px;">
-      <button id="gaitBtn" onclick="toggleGait()" style="padding: 12px 24px; border-radius: 8px; border: none; background: var(--primary); color: white; font-weight: bold; font-size: 1rem; cursor: pointer; transition: background 0.2s;">Start Gait Test</button>
-      <br><br>
-      <button onclick="resetToDefault()" style="padding: 8px 16px; border-radius: 8px; border: none; background: #475569; color: white; cursor: pointer;">Back to Default</button>
+    <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px; margin-bottom: 10px;">
+      <button id="gaitBtn" onclick="toggleGait()" style="flex: 1; padding: 10px 16px; border-radius: 8px; border: none; background: var(--primary); color: white; font-weight: bold; font-size: 0.9rem; cursor: pointer; transition: background 0.2s;">Start Gait Test</button>
+      <button onclick="resetToDefault()" style="flex: 1; padding: 10px 16px; border-radius: 8px; border: none; background: #475569; color: white; cursor: pointer; font-weight: bold; font-size: 0.9rem;">Back to Default</button>
     </div>
+    
+    <div class="footer">Real-time kinematic adjustments</div>
   </div>
 
 <script>
@@ -261,7 +260,7 @@ const char index_html[] PROGMEM = R"rawliteral(
       let canvas = document.getElementById(id);
       if(!canvas) return;
       let ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, 150, 150);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
       ctx.translate(tx, ty);
       
@@ -290,8 +289,8 @@ const char index_html[] PROGMEM = R"rawliteral(
     };
 
     // Draw Side (X) and Front (Y) views
-    drawView("sideCanvas", 75, 20, "x", "#3b82f6");
-    drawView("frontCanvas", 40, 20, "y", "#a78bfa");
+    drawView("sideCanvas", 75, 30, "x", "#3b82f6");
+    drawView("frontCanvas", 40, 30, "y", "#a78bfa");
   }
 
   function updateConfig() {
