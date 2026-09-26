@@ -46,6 +46,13 @@ enum LegDegreesOfFreedom {
 };
 LegDegreesOfFreedom currentDOF = DOF_3; // Default to 3DOF
 
+// How are the physical motors mounted?
+enum LinkageType {
+  LINKAGE_SERIAL,   // Tibia motor is mounted on the Femur (Knee angle is local)
+  LINKAGE_PARALLEL  // Tibia motor is mounted on the Body (Knee angle is global/absolute)
+};
+LinkageType currentLinkage = LINKAGE_SERIAL; // Default to standard Serial linkage
+
 
 /*
  * ServoConfig holds the calibration data for a single physical motor.
@@ -194,6 +201,13 @@ void calculateIK(float x, float y, float z, float &coxa_angle, float &femur_angl
   coxa_angle = coxa_angle * 180.0 / PI;
   femur_angle = femur_angle * 180.0 / PI;
   tibia_angle = tibia_angle * 180.0 / PI;
+
+  // 5. Apply Parallel Linkage adjustment if needed
+  // In a parallel linkage, the Tibia motor is mounted to the body, 
+  // so its angle must be offset by the Femur's tilt to keep the physical leg shape correct!
+  if (currentLinkage == LINKAGE_PARALLEL) {
+    tibia_angle = tibia_angle + femur_angle;
+  }
 }
 
 // ==============================================================================
