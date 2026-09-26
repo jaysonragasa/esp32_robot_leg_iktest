@@ -29,7 +29,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // --- Leg Dimensions ---
 // Adjust these measurements (in millimeters) to match your physical robot build.
-const float L_COXA = 20;  // Length of the shoulder joint sideways
+const float L_COXA = 17.6;  // Length of the shoulder joint sideways
 const float L_FEMUR = 49.3; // Length of the upper leg
 const float L_TIBIA = 58.0; // Length of the lower leg
 //const float L_TIBIA = 72.0; // Length of the lower leg
@@ -66,7 +66,7 @@ struct LegConfig {
 LegConfig legs[1] = {
   { 
     {0, 459, 2520, 90.0, true},  // Coxa on pin 0
-    {1, 459, 2760, 88.0, false}, // Femur on pin 1
+    {1, 459, 2640, 88.0, false}, // Femur on pin 1
     {2, 464, 2590, 0.0, false}   // Tibia on pin 2
 
     // {0, 459, 2520, 90.0, true},  // Coxa on pin 0
@@ -105,6 +105,11 @@ int gaitStep = 0;
 struct Point3D { float x; float y; float z; };
 Point3D gaitSequence[20];
 int gaitSequenceLength = 0;
+
+// Variables for loop profiling
+unsigned long lastHzUpdateMs = 0;
+int loopCounter = 0;
+float loopHz = 0.0;
 
 // ==============================================================================
 // 4. KINEMATICS (The Math Engine)
@@ -208,6 +213,9 @@ void updateScreen(float c, float f, float t) {
   
   display.setCursor(0, 48);
   display.print(WiFi.localIP());
+  display.print(" | ");
+  display.print((int)loopHz);
+  display.print("Hz");
   display.display();
 }
 
@@ -376,6 +384,15 @@ void setup() {
  * We've split the responsibilities into separate functions above so this stays clean!
  */
 void loop() {
+  loopCounter++;
+  unsigned long currentMs = millis();
+  if (currentMs - lastHzUpdateMs >= 1000) {
+    loopHz = loopCounter / ((currentMs - lastHzUpdateMs) / 1000.0);
+    loopCounter = 0;
+    lastHzUpdateMs = currentMs;
+    targetUpdated = true; // force redraw every second to show Hz
+  }
+
   // Check for incoming web requests
   server.handleClient();
 
