@@ -102,6 +102,10 @@ bool isGaitTest = false;
 unsigned long lastGaitMs = 0;
 int gaitStep = 0;
 
+struct Point3D { float x; float y; float z; };
+Point3D gaitSequence[20];
+int gaitSequenceLength = 0;
+
 // ==============================================================================
 // 4. KINEMATICS (The Math Engine)
 // ==============================================================================
@@ -227,29 +231,56 @@ void handleGait() {
   server.send(200, "text/plain", "OK");
 }
 
+void handleUploadGait() {
+  if (server.hasArg("plain")) {
+    String body = server.arg("plain");
+    gaitSequenceLength = 0;
+    int startIndex = 0;
+    while (startIndex < body.length() && gaitSequenceLength < 20) {
+      int semiIndex = body.indexOf(';', startIndex);
+      if (semiIndex == -1) semiIndex = body.length();
+      String stepStr = body.substring(startIndex, semiIndex);
+      
+      int c1 = stepStr.indexOf(',');
+      int c2 = stepStr.indexOf(',', c1 + 1);
+      
+      if (c1 != -1 && c2 != -1) {
+        gaitSequence[gaitSequenceLength].x = stepStr.substring(0, c1).toFloat();
+        gaitSequence[gaitSequenceLength].y = stepStr.substring(c1 + 1, c2).toFloat();
+        gaitSequence[gaitSequenceLength].z = stepStr.substring(c2 + 1).toFloat();
+        gaitSequenceLength++;
+      }
+      startIndex = semiIndex + 1;
+    }
+    
+    isGaitTest = true;
+    gaitStep = 0;
+    lastGaitMs = 0;
+  }
+  server.send(200, "text/plain", "OK");
+}
+
 // ==============================================================================
 // 7. BEHAVIOR LOGIC (Walking & Movement)
 // ==============================================================================
 
 /*
- * updateGaitTest cycles through 3 coordinates to make the leg "walk" in the air.
+ * updateGaitTest cycles through the uploaded coordinate sequence to make the leg "walk".
  */
 void updateGaitTest() {
-  if (isGaitTest) {
+  if (isGaitTest && gaitSequenceLength > 0) {
     if (millis() - lastGaitMs > 500) { // Every half second...
       lastGaitMs = millis();
       
-      // Pick the next position in our 3-step sequence
-      if (gaitStep == 0) {
-        targetX = 20; targetY = 20; targetZ = -90; // Step backward
-        gaitStep = 1;
-      } else if (gaitStep == 1) {
-        targetX = 0; targetY = 20; targetZ = -70; // Lift Leg
-        gaitStep = 2;
-      } else {
-        targetX = -20; targetY = -20; targetZ = -90; // Step forward
+      targetX = gaitSequence[gaitStep].x;
+      targetY = gaitSequence[gaitStep].y;
+      targetZ = gaitSequence[gaitStep].z;
+      
+      gaitStep++;
+      if (gaitStep >= gaitSequenceLength) {
         gaitStep = 0;
       }
+      
       targetUpdated = true;
     }
   }
@@ -328,6 +359,7 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/set", handleSet);
   server.on("/gait", handleGait);
+  server.on("/upload_gait", HTTP_POST, handleUploadGait);
   server.begin();
 
   // 4. Start Motors
