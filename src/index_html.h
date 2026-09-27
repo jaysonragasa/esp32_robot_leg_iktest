@@ -144,7 +144,7 @@ const char index_html[] PROGMEM = R"rawliteral(
         <span>Z-Axis (Vertical)</span>
         <span class="value-display"><span id="zVal">-90</span> mm</span>
       </div>
-      <input type="range" min="-120" max="-20" value="-90" id="zSlider" oninput="updateValues()">
+      <input type="range" min="-190" max="-20" value="-90" id="zSlider" oninput="updateValues()">
     </div>
     
     <div class="canvas-container" style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
@@ -173,9 +173,12 @@ const char index_html[] PROGMEM = R"rawliteral(
   </div>
 
 <script>
-  const L_COXA = 20;
-  const L_FEMUR = 49.3;
-  const L_TIBIA = 58.0;
+  // const L_COXA = 20;
+  // const L_FEMUR = 49.3;
+  // const L_TIBIA = 58.0;
+  const L_COXA = 20.0;
+  const L_FEMUR = 80.0;
+  const L_TIBIA = 110.0;
 
   function calculateFK(coxa_a, femur_a, tibia_a) {
     let p0 = {x: 0, y: 0, z: 0};
