@@ -31,12 +31,28 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 // Adjust these measurements (in millimeters) to match your physical robot build.
 const float L_COXA = 17.6;  // Length of the shoulder joint sideways
 const float L_FEMUR = 49.3; // Length of the upper leg
-const float L_TIBIA = 58.0; // Length of the lower leg
-//const float L_TIBIA = 72.0; // Length of the lower leg
+//const float L_TIBIA = 58.0; // Length of the lower leg
+const float L_TIBIA = 72.0; // Length of the lower leg
 
 // ==============================================================================
 // 2. DATA STRUCTURES (Structuring our variables)
 // ==============================================================================
+
+// How many motors is the leg actually using?
+enum LegDegreesOfFreedom {
+  DOF_1, // Femur only (Swing like a stick)
+  DOF_2, // Femur + Tibia (Forward/Backward and Up/Down, no side-to-side)
+  DOF_3  // Coxa + Femur + Tibia (Full 3D movement)
+};
+LegDegreesOfFreedom currentDOF = DOF_3; // Default to 3DOF
+
+// How are the physical motors mounted?
+enum LinkageType {
+  LINKAGE_SERIAL,   // Tibia motor is mounted on the Femur (Knee angle is local)
+  LINKAGE_PARALLEL  // Tibia motor is mounted on the Body (Knee angle is global/absolute)
+};
+LinkageType currentLinkage = LINKAGE_PARALLEL; // Default to standard Serial linkage
+
 
 /*
  * ServoConfig holds the calibration data for a single physical motor.
@@ -62,18 +78,37 @@ struct LegConfig {
   ServoConfig tibia;
 };
 
-// We are prototyping just the Front-Left leg for now.
+// ==============================================================================
+// 3. SERVO CONFIGURATION (Choose your hardware)
+// ==============================================================================
+
+// Uncomment exactly ONE of the lines below to choose your servo type!
+//#define SERVO_TYPE_MG996R
+#define SERVO_TYPE_MG90S
+
+#if defined(SERVO_TYPE_MG90S)
+// Configuration for the smaller MG90S micro servos (Custom Tuned)
 LegConfig legs[1] = {
   { 
     {0, 459, 2520, 90.0, true},  // Coxa on pin 0
     {1, 618, 2718, 86.0, false}, // Femur on pin 1
-    {2, 464, 2590, 0.0, false}   // Tibia on pin 2
-
-    // {0, 459, 2520, 90.0, true},  // Coxa on pin 0
-    // {1, 459, 2530, 80.0, false}, // Femur on pin 1
-    // {2, 459, 2580, 90.0, false}   // Tibia on pin 2
+    {2, 464, 2590, 0.0, true}    // Tibia on pin 2
   }
 };
+
+#elif defined(SERVO_TYPE_MG996R)
+// Configuration for the big TowerPro MG996R servos (Standard Timing)
+LegConfig legs[1] = {
+  { 
+    {0, 500, 2500, 90.0, true},  // Coxa on pin 0
+    {1, 500, 2500, 80.0, false}, // Femur on pin 1
+    {2, 500, 2500, 90.0, false}  // Tibia on pin 2
+  }
+};
+
+#else
+#error "Please uncomment a servo type at the top of the config!"
+#endif
 #define FL_LEG 0 // A friendly name for index 0
 
 // ==============================================================================
@@ -101,7 +136,6 @@ const int updateIntervalMs = 20; // 20ms delay = 50 updates per second
 bool isGaitTest = false;
 unsigned long lastGaitMs = 0;
 int gaitStep = 0;
-
 struct Point3D { float x; float y; float z; };
 Point3D gaitSequence[20];
 int gaitSequenceLength = 0;
@@ -124,43 +158,78 @@ void calculateIK(float x, float y, float z, float &coxa_angle, float &femur_angl
   // Flip X axis so that Positive X means "Forward"
   x = -x;
 
-  // 1. Coxa Angle (Looking down from above)
-  // Find the straight-line distance to the foot, ignoring the coxa's offset.
-  float L_yz = sqrt(y * y + z * z);
-  float L_p = sqrt(L_yz * L_yz - L_COXA * L_COXA);
-  
-  // Use basic trigonometry (atan2) to find the shoulder rotation.
-  float alpha_coxa = atan2(y, -z);
-  float beta_coxa = atan2(L_COXA, L_p);
-  coxa_angle = alpha_coxa - beta_coxa;
+  if (currentDOF == DOF_3) {
+    // ----------------------------------------------------
+    // 3-DOF MATH (Coxa, Femur, Tibia)
+    // ----------------------------------------------------
+    
+    // 1. Coxa Angle
+    float L_yz = sqrt(y * y + z * z);
+    float L_p = sqrt(L_yz * L_yz - L_COXA * L_COXA);
+    float alpha_coxa = atan2(y, -z);
+    float beta_coxa = atan2(L_COXA, L_p);
+    coxa_angle = alpha_coxa - beta_coxa;
 
-  // 2. Tibia Angle (The Knee)
-  // Find the diagonal distance from the hip joint to the foot.
-  float D_squared = x * x + L_p * L_p;
-  float D = sqrt(D_squared);
-  
-  // Use the Law of Cosines to figure out how much the knee needs to bend.
-  float cos_tibia = (D_squared - L_FEMUR * L_FEMUR - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * L_TIBIA);
-  
-  // constrain() prevents math errors if we ask the leg to reach too far.
-  cos_tibia = constrain(cos_tibia, -1.0, 1.0); 
-  
-  // We use a negative angle here to create a "bent backward" elbow shape ( > )
-  tibia_angle = -acos(cos_tibia); 
+    // 2. Tibia Angle
+    float D_squared = x * x + L_p * L_p;
+    float D = sqrt(D_squared);
+    float cos_tibia = (D_squared - L_FEMUR * L_FEMUR - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * L_TIBIA);
+    cos_tibia = constrain(cos_tibia, -1.0, 1.0); 
+    tibia_angle = -acos(cos_tibia); 
 
-  // 3. Femur Angle (The Hip)
-  // Use the Law of Cosines again to find the inner triangle angle of the hip.
-  float alpha_femur = atan2(x, L_p);
-  float cos_femur = (L_FEMUR * L_FEMUR + D_squared - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * D);
-  cos_femur = constrain(cos_femur, -1.0, 1.0);
-  float beta_femur = acos(cos_femur);
-  
-  femur_angle = alpha_femur + beta_femur; 
+    // 3. Femur Angle
+    float alpha_femur = atan2(x, L_p);
+    float cos_femur = (L_FEMUR * L_FEMUR + D_squared - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * D);
+    cos_femur = constrain(cos_femur, -1.0, 1.0);
+    float beta_femur = acos(cos_femur);
+    femur_angle = alpha_femur + beta_femur; 
+
+  } else if (currentDOF == DOF_2) {
+    // ----------------------------------------------------
+    // 2-DOF MATH (Femur, Tibia only - Y is ignored)
+    // ----------------------------------------------------
+    
+    coxa_angle = 0.0; // No shoulder rotation
+
+    // D is purely hypotenuse of X and Z.
+    float D_squared = x * x + z * z;
+    float D = sqrt(D_squared);
+
+    // Tibia Angle
+    float cos_tibia = (D_squared - L_FEMUR * L_FEMUR - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * L_TIBIA);
+    cos_tibia = constrain(cos_tibia, -1.0, 1.0); 
+    tibia_angle = -acos(cos_tibia); 
+
+    // Femur Angle
+    float alpha_femur = atan2(x, -z);
+    float cos_femur = (L_FEMUR * L_FEMUR + D_squared - L_TIBIA * L_TIBIA) / (2.0 * L_FEMUR * D);
+    cos_femur = constrain(cos_femur, -1.0, 1.0);
+    float beta_femur = acos(cos_femur);
+    femur_angle = alpha_femur + beta_femur; 
+
+  } else if (currentDOF == DOF_1) {
+    // ----------------------------------------------------
+    // 1-DOF MATH (Femur only - Just point at the target)
+    // ----------------------------------------------------
+    
+    coxa_angle = 0.0;
+    tibia_angle = 0.0;
+    
+    // Just point the femur at the X, Z coordinate
+    femur_angle = atan2(x, -z);
+  }
 
   // 4. Convert math results (Radians) to standard Motor angles (Degrees)
   coxa_angle = coxa_angle * 180.0 / PI;
   femur_angle = femur_angle * 180.0 / PI;
   tibia_angle = tibia_angle * 180.0 / PI;
+
+  // 5. Apply Parallel Linkage adjustment if needed
+  // In a parallel linkage, the Tibia motor is mounted to the body, 
+  // so its angle must be offset by the Femur's tilt to keep the physical leg shape correct!
+  if (currentLinkage == LINKAGE_PARALLEL) {
+    tibia_angle = tibia_angle + femur_angle;
+  }
 }
 
 // ==============================================================================
@@ -174,14 +243,16 @@ void setAngle(ServoConfig servo, float angle) {
   // 1. Apply our manual tuning offset
   float desiredAngle = angle + servo.offset;
   
-  // 2. Invert direction if this specific motor is mounted backwards
+  // 2. Handle negative angles gracefully (this acts as a mirror around 0)
+  // We do this BEFORE the invert, so the invert logic (180 - angle) doesn't break
+  desiredAngle = abs(desiredAngle);
+
+  // 3. Invert direction if this specific motor is mounted backwards
   if (servo.invert) {
     desiredAngle = 180.0f - desiredAngle;
   }
 
-  // 3. Safety checks! Don't let negative numbers break the motor, 
-  // and strictly limit it between 0 and 180 degrees.
-  desiredAngle = abs(desiredAngle);
+  // 4. Safety checks! strictly limit it between 0 and 180 degrees.
   desiredAngle = fmax(0.0f, fmin(180.0f, desiredAngle));
 
   // 4. Convert the safe 0-180 degree angle into electronic pulse timings (Microseconds)
@@ -227,6 +298,22 @@ void handleSet() {
   if (server.hasArg("x")) targetX = server.arg("x").toFloat();
   if (server.hasArg("y")) targetY = server.arg("y").toFloat();
   if (server.hasArg("z")) targetZ = server.arg("z").toFloat();
+  targetUpdated = true;
+  server.send(200, "text/plain", "OK");
+}
+
+void handleConfig() {
+  if (server.hasArg("dof")) {
+    int d = server.arg("dof").toInt();
+    if (d == 1) currentDOF = DOF_1;
+    else if (d == 2) currentDOF = DOF_2;
+    else currentDOF = DOF_3;
+  }
+  if (server.hasArg("linkage")) {
+    int l = server.arg("linkage").toInt();
+    if (l == 1) currentLinkage = LINKAGE_PARALLEL;
+    else currentLinkage = LINKAGE_SERIAL;
+  }
   targetUpdated = true;
   server.send(200, "text/plain", "OK");
 }
@@ -281,7 +368,6 @@ void handleUploadGait() {
  */
 void updateGaitTest() {
   if (isGaitTest && gaitSequenceLength > 0) {
-    
     // 1. Check how far the physical leg is from the current target
     float dx = targetX - currentX;
     float dy = targetY - currentY;
@@ -289,8 +375,7 @@ void updateGaitTest() {
     float dist = sqrt(dx*dx + dy*dy + dz*dz);
     
     // 2. Only proceed to the next step if we have physically arrived! (within 1 millimeter)
-    if (dist < 1.0) { 
-      
+    if (dist < 1.0) {
       // 3. Tiny pause at the end of each step (e.g., 50ms) before snapping to the next one
       if (millis() - lastGaitMs > 50) { 
         lastGaitMs = millis();
@@ -308,7 +393,6 @@ void updateGaitTest() {
       }
     } else {
       // If the leg is still moving, constantly reset the pause timer. 
-      // This ensures our 50ms pause only starts counting AFTER the leg has arrived!
       lastGaitMs = millis();
     }
   }
@@ -386,6 +470,7 @@ void setup() {
   // 3. Start Web Server
   server.on("/", handleRoot);
   server.on("/set", handleSet);
+  server.on("/config", handleConfig);
   server.on("/gait", handleGait);
   server.on("/upload_gait", HTTP_POST, handleUploadGait);
   server.begin();
