@@ -142,19 +142,19 @@ const char index_html[] PROGMEM = R"rawliteral(
     <div class="slider-container">
       <div class="label-row">
         <span>Z-Axis (Vertical)</span>
-        <span class="value-display"><span id="zVal">-90</span> mm</span>
+        <span class="value-display"><span id="zVal">-150</span> mm</span>
       </div>
-      <input type="range" min="-190" max="-20" value="-90" id="zSlider" oninput="updateValues()">
+      <input type="range" min="-190" max="-20" value="-150" id="zSlider" oninput="updateValues()">
     </div>
     
     <div class="canvas-container" style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
       <div style="text-align: center; width: 48%;">
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Side View (X-Z)</div>
-        <canvas id="sideCanvas" width="150" height="150" style="background: #0f172a; border-radius: 8px; width: 100%; max-width: 150px;"></canvas>
+        <canvas id="sideCanvas" width="150" height="250" style="background: #0f172a; border-radius: 8px; width: 100%; max-width: 150px;"></canvas>
       </div>
       <div style="text-align: center; width: 48%;">
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Front View (Y-Z)</div>
-        <canvas id="frontCanvas" width="150" height="150" style="background: #0f172a; border-radius: 8px; width: 100%; max-width: 150px;"></canvas>
+        <canvas id="frontCanvas" width="150" height="250" style="background: #0f172a; border-radius: 8px; width: 100%; max-width: 150px;"></canvas>
       </div>
     </div>
     
@@ -177,8 +177,8 @@ const char index_html[] PROGMEM = R"rawliteral(
   // const L_FEMUR = 49.3;
   // const L_TIBIA = 58.0;
   const L_COXA = 20.0;
-  const L_FEMUR = 80.0;
-  const L_TIBIA = 110.0;
+  const L_FEMUR = 79.39;
+  const L_TIBIA = 117.37;
 
   function calculateFK(coxa_a, femur_a, tibia_a) {
     let p0 = {x: 0, y: 0, z: 0};
@@ -349,7 +349,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   function resetToDefault() {
     document.getElementById("xSlider").value = 0;
     document.getElementById("ySlider").value = 17;
-    document.getElementById("zSlider").value = -90;
+    document.getElementById("zSlider").value = -150;
     updateValues();
   }
 
