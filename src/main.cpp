@@ -18,8 +18,9 @@ WebServer server(80);
 
 // PWM Motor Controller setup (default I2C address 0x40)
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
-#define SERVO_FREQ                                                             \
-    50 // Analog servos typically run at 50 updates per second (50 Hz)
+
+// Analog servos typically run at 50 updates per second (50 Hz)
+#define SERVO_FREQ 50 
 
 // OLED display setup
 #define SCREEN_WIDTH 128
@@ -32,7 +33,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 // build. const float L_COXA = 17.6;  // Length of the shoulder joint sideways
 // const float L_FEMUR = 49.3; // Length of the upper leg
 // const float L_TIBIA = 72.0; // Length of the lower leg
-
 const float L_COXA = 17.6;   // Length of the shoulder joint sideways
 const float L_FEMUR = 79.39;  // Length of the upper leg
 const float L_TIBIA = 117.37; // Length of the lower leg
@@ -104,8 +104,8 @@ LegConfig legs[1] = {{
 // Configuration for the big TowerPro MG996R servos (Standard Timing)
 LegConfig legs[1] = {{
         {0, 500, 2500, 90.0, true},  // Coxa on pin 0
-        {1, 450, 2590, 90.0, false}, // Femur on pin 1
-        {2, 580, 2520, 90.0, false}  // Tibia on pin 2
+        {1, 450, 2590, (90.0 + -25.0), false}, // Femur on pin 1
+        {2, 580, 2520, (90.0 + -31.0), false}  // Tibia on pin 2
 }};
 
 #else
@@ -143,6 +143,12 @@ int gaitStep = 0;
 unsigned long lastHzUpdateMs = 0;
 int loopCounter = 0;
 float loopHz = 0.0;
+
+// Web Calibration Offsets (Live tuning)
+float webOffsetCoxa = 0.0;
+float webOffsetFemur = 0.0;
+float webOffsetTibia = 0.0;
+bool forceServoUpdate = false; // Set to true to force servos to move even if stationary
 
 #pragma endregion
 
@@ -319,8 +325,13 @@ void calculateIK(float x, float y, float z, float &coxa_angle,
  * motor.
  */
 void setAngle(ServoConfig servo, float angle) {
-    // 1. Apply our manual tuning offset
-    float desiredAngle = angle + servo.offset;
+    // 1. Apply our manual tuning offset (Hardcoded + Web UI)
+    float activeWebOffset = 0.0;
+    if (servo.pin == legs[FL_LEG].coxa.pin) activeWebOffset = webOffsetCoxa;
+    else if (servo.pin == legs[FL_LEG].femur.pin) activeWebOffset = webOffsetFemur;
+    else if (servo.pin == legs[FL_LEG].tibia.pin) activeWebOffset = webOffsetTibia;
+    
+    float desiredAngle = angle + servo.offset + activeWebOffset;
 
     // 2. Handle negative angles gracefully (this acts as a mirror around 0)
     // We do this BEFORE the invert, so the invert logic (180 - angle) doesn't
@@ -422,6 +433,14 @@ void handleGait() {
     server.send(200, "text/plain", "OK");
 }
 
+void handleOffset() {
+    if (server.hasArg("c")) webOffsetCoxa = server.arg("c").toFloat();
+    if (server.hasArg("f")) webOffsetFemur = server.arg("f").toFloat();
+    if (server.hasArg("t")) webOffsetTibia = server.arg("t").toFloat();
+    forceServoUpdate = true; // force an update to apply offsets immediately
+    server.send(200, "text/plain", "OK");
+}
+
 #pragma endregion
 
 #pragma region 7. BEHAVIOR LOGIC (Walking & Movement)
@@ -489,18 +508,20 @@ void updateInterpolation() {
         float dz = targetZ - currentZ;
         float dist = sqrt(dx * dx + dy * dy + dz * dz);
 
-        // If we haven't reached the target yet...
-        if (dist > 0.01) {
-            // Step slightly closer to the target
-            if (dist > moveSpeed) {
-                currentX += (dx / dist) * moveSpeed;
-                currentY += (dy / dist) * moveSpeed;
-                currentZ += (dz / dist) * moveSpeed;
-            } else {
-                // We arrived! Snap to exact target.
-                currentX = targetX;
-                currentY = targetY;
-                currentZ = targetZ;
+        // If we haven't reached the target yet, OR we forced an update...
+        if (dist > 0.01 || forceServoUpdate) {
+            // Step slightly closer to the target (only if we need to move)
+            if (dist > 0.01) {
+                if (dist > moveSpeed) {
+                    currentX += (dx / dist) * moveSpeed;
+                    currentY += (dy / dist) * moveSpeed;
+                    currentZ += (dz / dist) * moveSpeed;
+                } else {
+                    // We arrived! Snap to exact target.
+                    currentX = targetX;
+                    currentY = targetY;
+                    currentZ = targetZ;
+                }
             }
 
             // Convert our new intermediate position into motor angles
@@ -516,6 +537,8 @@ void updateInterpolation() {
                 setAngle(leg.femur, femurAngle);
                 setAngle(leg.tibia, tibiaAngle);
             }
+            
+            forceServoUpdate = false; // We successfully updated the hardware
         }
     }
 }
@@ -552,6 +575,7 @@ void setup() {
     server.on("/set", handleSet);
     server.on("/config", handleConfig);
     server.on("/gait", handleGait);
+    server.on("/offset", handleOffset);
     server.begin();
 
     // 4. Start Motors

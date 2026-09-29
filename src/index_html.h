@@ -96,10 +96,55 @@ const char index_html[] PROGMEM = R"rawliteral(
       font-size: 0.8rem;
       color: var(--text-muted);
     }
+    .main-wrapper {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: flex-start;
+      width: 100%;
+      padding: 2rem;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="main-wrapper">
+    <!-- OFFSET PANEL (Left) -->
+    <div class="container">
+      <h1>Calibration</h1>
+      <p class="subtitle">Motor Offsets (Degrees)</p>
+      
+      <div class="slider-container">
+        <div class="label-row">
+          <span>Coxa Offset</span>
+          <span class="value-display"><span id="coxaOffVal">0</span>&deg;</span>
+        </div>
+        <input type="range" min="-90" max="90" value="0" id="coxaOffSlider" oninput="updateOffsets()">
+      </div>
+      
+      <div class="slider-container">
+        <div class="label-row">
+          <span>Femur Offset</span>
+          <span class="value-display"><span id="femurOffVal">0</span>&deg;</span>
+        </div>
+        <input type="range" min="-90" max="90" value="0" id="femurOffSlider" oninput="updateOffsets()">
+      </div>
+      
+      <div class="slider-container">
+        <div class="label-row">
+          <span>Tibia Offset</span>
+          <span class="value-display"><span id="tibiaOffVal">0</span>&deg;</span>
+        </div>
+        <input type="range" min="-90" max="90" value="0" id="tibiaOffSlider" oninput="updateOffsets()">
+      </div>
+      
+      <div class="footer">
+        Offsets apply directly to the hardware and are not shown in the 3D visualizer.
+      </div>
+    </div>
+
+    <!-- MAIN IK PANEL (Right) -->
+    <div class="container">
     <h1>AskalBot</h1>
     <p class="subtitle">3DOF Leg IK Controller</p>
 
@@ -176,7 +221,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   // const L_COXA = 20;
   // const L_FEMUR = 49.3;
   // const L_TIBIA = 58.0;
-  const L_COXA = 20.0;
+  const L_COXA = 17.6;
   const L_FEMUR = 79.39;
   const L_TIBIA = 117.37;
 
@@ -346,11 +391,36 @@ const char index_html[] PROGMEM = R"rawliteral(
       .catch(err => console.error(err));
   }
 
+  let offsetTimeout = null;
+  function updateOffsets() {
+    let c = document.getElementById("coxaOffSlider").value;
+    let f = document.getElementById("femurOffSlider").value;
+    let t = document.getElementById("tibiaOffSlider").value;
+    
+    document.getElementById("coxaOffVal").innerText = c;
+    document.getElementById("femurOffVal").innerText = f;
+    document.getElementById("tibiaOffVal").innerText = t;
+    
+    if (offsetTimeout !== null) {
+      clearTimeout(offsetTimeout);
+    }
+    offsetTimeout = setTimeout(() => {
+      fetch(`/offset?c=${c}&f=${f}&t=${t}`)
+        .catch(err => console.error(err));
+    }, 50);
+  }
+
   function resetToDefault() {
     document.getElementById("xSlider").value = 0;
     document.getElementById("ySlider").value = 17;
     document.getElementById("zSlider").value = -150;
+    
+    document.getElementById("coxaOffSlider").value = 0;
+    document.getElementById("femurOffSlider").value = 0;
+    document.getElementById("tibiaOffSlider").value = 0;
+    
     updateValues();
+    updateOffsets();
   }
 
   window.onload = () => {
