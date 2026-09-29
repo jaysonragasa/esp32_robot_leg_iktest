@@ -111,7 +111,7 @@ LegConfig legs[1] = {{
 #else
 #error "Please uncomment a servo type at the top of the config!"
 #endif
-#define FL_LEG 0 // A friendly name for index 0
+int numLegs = sizeof(legs) / sizeof(legs[0]);
 
 #pragma endregion
 
@@ -324,12 +324,12 @@ void calculateIK(float x, float y, float z, float &coxa_angle,
  * setAngle takes a calculated math angle and safely sends it to the physical
  * motor.
  */
-void setAngle(ServoConfig servo, float angle) {
+void setAngle(ServoConfig servo, float angle, int legIndex) {
     // 1. Apply our manual tuning offset (Hardcoded + Web UI)
     float activeWebOffset = 0.0;
-    if (servo.pin == legs[FL_LEG].coxa.pin) activeWebOffset = webOffsetCoxa;
-    else if (servo.pin == legs[FL_LEG].femur.pin) activeWebOffset = webOffsetFemur;
-    else if (servo.pin == legs[FL_LEG].tibia.pin) activeWebOffset = webOffsetTibia;
+    if (servo.pin == legs[legIndex].coxa.pin) activeWebOffset = webOffsetCoxa;
+    else if (servo.pin == legs[legIndex].femur.pin) activeWebOffset = webOffsetFemur;
+    else if (servo.pin == legs[legIndex].tibia.pin) activeWebOffset = webOffsetTibia;
     
     float desiredAngle = angle + servo.offset + activeWebOffset;
 
@@ -529,13 +529,11 @@ void updateInterpolation() {
             calculateIK(currentX, currentY, currentZ, coxaAngle, femurAngle,
                                     tibiaAngle);
 
-            // In C++, raw arrays don't have a ".length" property!
-            // The cleanest way is to use a range-based for loop:
-            for (LegConfig &leg : legs) {
-                // Write to the physical hardware
-                setAngle(leg.coxa, coxaAngle);
-                setAngle(leg.femur, femurAngle);
-                setAngle(leg.tibia, tibiaAngle);
+            // Write to the physical hardware
+            for (int i = 0; i < numLegs; i++) {
+                setAngle(legs[i].coxa, coxaAngle, i);
+                setAngle(legs[i].femur, femurAngle, i);
+                setAngle(legs[i].tibia, tibiaAngle, i);
             }
             
             forceServoUpdate = false; // We successfully updated the hardware
