@@ -96,10 +96,55 @@ const char index_html[] PROGMEM = R"rawliteral(
       font-size: 0.8rem;
       color: var(--text-muted);
     }
+    .main-wrapper {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: flex-start;
+      width: 100%;
+      padding: 2rem;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="main-wrapper">
+    <!-- OFFSET PANEL (Left) -->
+    <div class="container">
+      <h1>Calibration</h1>
+      <p class="subtitle">Motor Offsets (Degrees)</p>
+      
+      <div class="slider-container">
+        <div class="label-row">
+          <span>Coxa Offset</span>
+          <span class="value-display"><span id="coxaOffVal">0</span>&deg;</span>
+        </div>
+        <input type="range" min="-90" max="90" value="0" id="coxaOffSlider" oninput="updateOffsets()">
+      </div>
+      
+      <div class="slider-container">
+        <div class="label-row">
+          <span>Femur Offset</span>
+          <span class="value-display"><span id="femurOffVal">0</span>&deg;</span>
+        </div>
+        <input type="range" min="-90" max="90" value="0" id="femurOffSlider" oninput="updateOffsets()">
+      </div>
+      
+      <div class="slider-container">
+        <div class="label-row">
+          <span>Tibia Offset</span>
+          <span class="value-display"><span id="tibiaOffVal">0</span>&deg;</span>
+        </div>
+        <input type="range" min="-90" max="90" value="0" id="tibiaOffSlider" oninput="updateOffsets()">
+      </div>
+      
+      <div class="footer">
+        Offsets apply directly to the hardware and are not shown in the 3D visualizer.
+      </div>
+    </div>
+
+    <!-- MAIN IK PANEL (Right) -->
+    <div class="container">
     <h1>AskalBot</h1>
     <p class="subtitle">3DOF Leg IK Controller</p>
 
@@ -150,11 +195,11 @@ const char index_html[] PROGMEM = R"rawliteral(
     <div class="canvas-container" style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
       <div style="text-align: center; width: 48%;">
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Side View (X-Z)</div>
-        <canvas id="sideCanvas" width="150" height="150" style="background: #0f172a; border-radius: 8px; width: 100%; max-width: 150px;"></canvas>
+        <canvas id="sideCanvas" width="150" height="250" style="background: #0f172a; border-radius: 8px; width: 100%; max-width: 150px;"></canvas>
       </div>
       <div style="text-align: center; width: 48%;">
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Front View (Y-Z)</div>
-        <canvas id="frontCanvas" width="150" height="150" style="background: #0f172a; border-radius: 8px; width: 100%; max-width: 150px;"></canvas>
+        <canvas id="frontCanvas" width="150" height="250" style="background: #0f172a; border-radius: 8px; width: 100%; max-width: 150px;"></canvas>
       </div>
     </div>
     
@@ -169,13 +214,19 @@ const char index_html[] PROGMEM = R"rawliteral(
       <button onclick="resetToDefault()" style="flex: 1; padding: 10px 16px; border-radius: 8px; border: none; background: #475569; color: white; cursor: pointer; font-weight: bold; font-size: 0.9rem;">Back to Default</button>
     </div>
     
-    <div class="footer">Real-time kinematic adjustments</div>
+    <div class="footer">
+      Real-time kinematic adjustments<br>
+      <a href="https://www.desmos.com/calculator/tmym0394sv" target="_blank" style="color: var(--primary); text-decoration: none; font-weight: bold; margin-top: 5px; display: inline-block;">View IK Math in Desmos</a>
+    </div>
   </div>
 
 <script>
-  const L_COXA = 20;
+  // const L_COXA = 17.6;
+  // const L_FEMUR = 79.39;
+  // const L_TIBIA = 117.37;
+  const L_COXA = 17.6;
   const L_FEMUR = 49.3;
-  const L_TIBIA = 58.0;
+  const L_TIBIA = 72.0;
 
   function calculateFK(coxa_a, femur_a, tibia_a) {
     let p0 = {x: 0, y: 0, z: 0};
@@ -343,11 +394,36 @@ const char index_html[] PROGMEM = R"rawliteral(
       .catch(err => console.error(err));
   }
 
+  let offsetTimeout = null;
+  function updateOffsets() {
+    let c = document.getElementById("coxaOffSlider").value;
+    let f = document.getElementById("femurOffSlider").value;
+    let t = document.getElementById("tibiaOffSlider").value;
+    
+    document.getElementById("coxaOffVal").innerText = c;
+    document.getElementById("femurOffVal").innerText = f;
+    document.getElementById("tibiaOffVal").innerText = t;
+    
+    if (offsetTimeout !== null) {
+      clearTimeout(offsetTimeout);
+    }
+    offsetTimeout = setTimeout(() => {
+      fetch(`/offset?c=${c}&f=${f}&t=${t}`)
+        .catch(err => console.error(err));
+    }, 50);
+  }
+
   function resetToDefault() {
     document.getElementById("xSlider").value = 0;
     document.getElementById("ySlider").value = 17;
-    document.getElementById("zSlider").value = -90;
+    document.getElementById("zSlider").value = -150;
+    
+    document.getElementById("coxaOffSlider").value = 0;
+    document.getElementById("femurOffSlider").value = 0;
+    document.getElementById("tibiaOffSlider").value = 0;
+    
     updateValues();
+    updateOffsets();
   }
 
   window.onload = () => {
