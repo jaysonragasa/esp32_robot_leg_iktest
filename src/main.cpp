@@ -94,25 +94,23 @@ struct LegConfig {
 #define SERVO_TYPE_MG90S
 
 #if defined(SERVO_TYPE_MG90S)
-// Configuration for the smaller MG90S micro servos (Custom Tuned)
-LegConfig legs[1] = {{
-    {0, 459, 2520, 90.0, true},   // Coxa on pin 0
-    {1, 618, 2718, 86.0, false},  // Femur on pin 1
-    {2, 464, 2590, 0.0, true}     // Tibia on pin 2
-}};
-
+    // Configuration for the smaller MG90S micro servos (Custom Tuned)
+    LegConfig legs[1] = {{
+        {0, 459, 2520, 90.0, true},   // Coxa on pin 0
+        {1, 618, 2718, 86.0, false},  // Femur on pin 1
+        {2, 464, 2590, 0.0, true}     // Tibia on pin 2
+    }};
 #elif defined(SERVO_TYPE_MG996R)
-// Configuration for the big TowerPro MG996R servos (Standard Timing)
-LegConfig legs[1] = {{
-    {0, 500, 2500, 90.0, true},   // Coxa on pin 0
-    {1, 500, 2500, 80.0, false},  // Femur on pin 1
-    {2, 500, 2500, 90.0, false}   // Tibia on pin 2
-}};
-
+    // Configuration for the big TowerPro MG996R servos (Standard Timing)
+    LegConfig legs[1] = {{
+        {0, 500, 2500, 90.0, true},   // Coxa on pin 0
+        {1, 500, 2500, 80.0, false},  // Femur on pin 1
+        {2, 500, 2500, 90.0, false}   // Tibia on pin 2
+    }};
 #else
-#error "Please uncomment a servo type at the top of the config!"
+    #error "Please uncomment a servo type at the top of the config!"
 #endif
-#define FL_LEG 0  // A friendly name for index 0
+int numLegs = sizeof(legs) / sizeof(legs[0]);
 
 #pragma endregion
 
@@ -252,14 +250,14 @@ void calculateIK(float x, float y, float z, float &coxa_angle,
  * setAngle takes a calculated math angle and safely sends it to the physical
  * motor.
  */
-void setAngle(ServoConfig servo, float angle) {
+void setAngle(ServoConfig servo, float angle, int legIndex) {
     // 1. Apply our manual tuning offset (Hardcoded + Web UI)
     float activeWebOffset = 0.0;
-    if (servo.pin == legs[FL_LEG].coxa.pin)
+    if (servo.pin == legs[legIndex].coxa.pin)
         activeWebOffset = webOffsetCoxa;
-    else if (servo.pin == legs[FL_LEG].femur.pin)
+    else if (servo.pin == legs[legIndex].femur.pin)
         activeWebOffset = webOffsetFemur;
-    else if (servo.pin == legs[FL_LEG].tibia.pin)
+    else if (servo.pin == legs[legIndex].tibia.pin)
         activeWebOffset = webOffsetTibia;
 
     float desiredAngle = angle + servo.offset + activeWebOffset;
@@ -458,10 +456,10 @@ void updateInterpolation() {
                         tibiaAngle);
 
             // Write to the physical hardware
-            for (LegConfig &leg : legs) {
-                setAngle(leg.coxa, coxaAngle);
-                setAngle(leg.femur, femurAngle);
-                setAngle(leg.tibia, tibiaAngle);
+            for (int i = 0; i < numLegs; i++) {
+                setAngle(legs[i].coxa, coxaAngle, i);
+                setAngle(legs[i].femur, femurAngle, i);
+                setAngle(legs[i].tibia, tibiaAngle, i);
             }
 
             forceServoUpdate = false;  // We successfully updated the hardware
